@@ -5,6 +5,7 @@ interface LoginModalProps {
   onLogin: (credentials: LoginCredentials) => void;
   error: string | null;
   isLoading: boolean;
+  isOpen: boolean;
 }
 
 // Eye icons components to reduce inline SVG clutter
@@ -21,17 +22,33 @@ const EyeSlashIcon = () => (
   </svg>
 );
 
-export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
+export const LoginModal = ({ onLogin, error, isLoading, isOpen }: LoginModalProps) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const usernameRef = useRef<HTMLInputElement>(null);
 
-  // Focus username field on mount
+  // Handle fade-in animation on mount/open
   useEffect(() => {
-    usernameRef.current?.focus();
-  }, []);
+    if (isOpen) {
+      // Trigger fade-in animation
+      requestAnimationFrame(() => {
+        setIsAnimating(true);
+      });
+    } else {
+      // Trigger fade-out animation
+      setIsAnimating(false);
+    }
+  }, [isOpen]);
+
+  // Focus username field when modal opens
+  useEffect(() => {
+    if (isOpen && isAnimating) {
+      usernameRef.current?.focus();
+    }
+  }, [isOpen, isAnimating]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -44,9 +61,23 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
     }
   };
 
+  // Don't render if not open and animation is complete
+  if (!isOpen && !isAnimating) {
+    return null;
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/50 m-0">
-      <div className="rounded-lg shadow-2xl p-8 w-full max-w-md mx-4 border" style={{ backgroundColor: 'var(--card-background)', color: 'var(--text-color)', borderColor: 'var(--border-color)' }}>
+    <div 
+      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/20 m-0 transition-opacity duration-300 ${
+        isAnimating ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div 
+        className={`rounded-lg shadow-2xl p-8 w-full max-w-md mx-4 border transition-all duration-300 ${
+          isAnimating ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`}
+        style={{ backgroundColor: 'var(--card-background)', color: 'var(--text-color)', borderColor: 'var(--border-color)' }}
+      >
         {/* Logo and Title */}
         <div className="text-center mb-6">
           <img 
@@ -64,7 +95,13 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} autoComplete="on">
+        <form 
+          onSubmit={handleSubmit} 
+          autoComplete="on"
+          id="login-form"
+          name="login"
+          data-form-type="login"
+        >
           {/* Username Field */}
           <div className="mb-4">
             <label 
@@ -79,6 +116,10 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
               id="username"
               name="username"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+              enterKeyHint="next"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
@@ -102,6 +143,7 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
                 id="password"
                 name="password"
                 autoComplete="current-password"
+                enterKeyHint="go"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
@@ -143,8 +185,10 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
           {/* Submit Button */}
           <button
             type="submit"
+            name="submit"
             disabled={isLoading || !username.trim() || !password}
             className="w-full py-2.5 px-4 rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-sky-700 hover:bg-sky-800 disabled:hover:bg-sky-700"
+            aria-label="Sign in"
           >
             {isLoading ? (
               <span className="flex items-center justify-center">

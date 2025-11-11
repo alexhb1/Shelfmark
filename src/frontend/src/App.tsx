@@ -19,7 +19,6 @@ function App() {
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authRequired, setAuthRequired] = useState<boolean>(true);
-  const [isAuthCheckComplete, setIsAuthCheckComplete] = useState<boolean>(false);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
@@ -158,9 +157,6 @@ function App() {
         setAuthRequired(true);
         setIsAuthenticated(false);
         setShowLoginModal(true);
-      } finally {
-        // Mark auth check as complete to enable fade-in
-        setIsAuthCheckComplete(true);
       }
     };
     verifyAuth();
@@ -375,17 +371,16 @@ function App() {
   return (
     <>
       {/* Login Modal */}
-      {showLoginModal && (
-        <LoginModal
-          onLogin={handleLogin}
-          error={loginError}
-          isLoading={isLoggingIn}
-        />
-      )}
+      <LoginModal
+        onLogin={handleLogin}
+        error={loginError}
+        isLoading={isLoggingIn}
+        isOpen={showLoginModal}
+      />
 
       {/* Main App Content - Only render when authenticated */}
       {isAuthenticated && (
-        <div className={`flex flex-col flex-1 transition-opacity duration-300 ${isAuthCheckComplete ? 'opacity-100' : 'opacity-0'}`}>
+        <>
           <Header 
             calibreWebUrl={config?.calibre_web_url || ''} 
             debug={config?.debug || false}
@@ -479,7 +474,7 @@ function App() {
             onCancel={handleCancel}
             activeCount={activeCount}
           />
-        </div>
+        </>
       )}
     </>
   );
