@@ -16,9 +16,10 @@ import { DEFAULT_LANGUAGES, DEFAULT_SUPPORTED_FORMATS } from './data/languages';
 import './styles.css';
 
 function App() {
-  // Authentication state - optimistically assume authenticated until proven otherwise
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authRequired, setAuthRequired] = useState<boolean>(true);
+  const [isAuthCheckComplete, setIsAuthCheckComplete] = useState<boolean>(false);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
@@ -136,7 +137,7 @@ function App() {
   // Track previous status for change detection
   const prevStatusRef = useRef<StatusData>({});
   
-  // Check authentication on mount (runs in background, no loading state)
+  // Check authentication on mount
   useEffect(() => {
     const verifyAuth = async () => {
       try {
@@ -157,6 +158,9 @@ function App() {
         setAuthRequired(true);
         setIsAuthenticated(false);
         setShowLoginModal(true);
+      } finally {
+        // Mark auth check as complete to enable fade-in
+        setIsAuthCheckComplete(true);
       }
     };
     verifyAuth();
@@ -381,7 +385,7 @@ function App() {
 
       {/* Main App Content - Only render when authenticated */}
       {isAuthenticated && (
-        <>
+        <div className={`flex flex-col flex-1 transition-opacity duration-300 ${isAuthCheckComplete ? 'opacity-100' : 'opacity-0'}`}>
           <Header 
             calibreWebUrl={config?.calibre_web_url || ''} 
             debug={config?.debug || false}
@@ -459,7 +463,8 @@ function App() {
             buildVersion={config?.build_version || 'dev'} 
             releaseVersion={config?.release_version || 'dev'} 
             appEnv={config?.app_env || 'development'}
-            isAuthenticated={authRequired && isAuthenticated}
+            authRequired={authRequired}
+            isAuthenticated={isAuthenticated}
             onLogout={handleLogout}
           />
           <ToastContainer toasts={toasts} />
@@ -474,7 +479,7 @@ function App() {
             onCancel={handleCancel}
             activeCount={activeCount}
           />
-        </>
+        </div>
       )}
     </>
   );

@@ -63,14 +63,11 @@ export const getStatus = async (): Promise<StatusData> => {
 };
 
 export const cancelDownload = async (id: string): Promise<void> => {
-  await fetch(`${API.cancelDownload}/${encodeURIComponent(id)}/cancel`, { method: 'DELETE' });
+  await fetchJSON(`${API.cancelDownload}/${encodeURIComponent(id)}/cancel`, { method: 'DELETE' });
 };
 
 export const clearCompleted = async (): Promise<void> => {
-  const response = await fetch(`${API_BASE}/queue/clear`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) throw new Error('Failed to clear completed');
+  await fetchJSON(`${API_BASE}/queue/clear`, { method: 'DELETE' });
 };
 
 export const getConfig = async (): Promise<AppConfig> => {
