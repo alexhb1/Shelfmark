@@ -77,5 +77,6 @@ export interface LoginCredentials {
 export interface AuthResponse {
   success?: boolean;
   authenticated?: boolean;
+  auth_required?: boolean;
   error?: string;
 }

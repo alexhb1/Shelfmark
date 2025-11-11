@@ -156,10 +156,10 @@ def serve_frontend_assets(filename: str) -> Response:
     return send_from_directory(os.path.join(app.root_path, 'frontend-dist', 'assets'), filename)
 
 @app.route('/')
-@login_required
 def index() -> Response:
     """
     Serve the React frontend application.
+    Authentication is handled by the React app itself.
     """
     return send_from_directory(os.path.join(app.root_path, 'frontend-dist'), 'index.html')
 
@@ -660,28 +660,37 @@ def api_auth_check() -> Union[Response, Tuple[Response, int]]:
     Check if user has a valid session.
     
     Returns:
-        flask.Response: JSON with authentication status.
+        flask.Response: JSON with authentication status and whether auth is required.
     """
     try:
-        # If no database is configured, always return authenticated
+        # If no database is configured, authentication is not required
         if not CWA_DB_PATH:
-            return jsonify({"authenticated": True})
+            return jsonify({
+                "authenticated": True,
+                "auth_required": False
+            })
         
         # Check if user has a valid session
         is_authenticated = 'user_id' in session
-        return jsonify({"authenticated": is_authenticated})
+        return jsonify({
+            "authenticated": is_authenticated,
+            "auth_required": True
+        })
     except Exception as e:
         logger.error_trace(f"Auth check error: {e}")
-        return jsonify({"authenticated": False})
+        return jsonify({
+            "authenticated": False,
+            "auth_required": True
+        })
 
 # Catch-all route for React Router (must be last)
 # This handles client-side routing by serving index.html for any unmatched routes
 @app.route('/<path:path>')
-@login_required
 def catch_all(path: str) -> Response:
     """
     Serve the React app for any route not matched by API endpoints.
     This allows React Router to handle client-side routing.
+    Authentication is handled by the React app itself.
     """
     # If the request is for an API endpoint or static file, let it 404
     if path.startswith('api/') or path.startswith('assets/'):

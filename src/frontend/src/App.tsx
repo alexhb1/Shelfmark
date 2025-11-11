@@ -18,6 +18,7 @@ import './styles.css';
 function App() {
   // Authentication state - optimistically assume authenticated until proven otherwise
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [authRequired, setAuthRequired] = useState<boolean>(true);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
@@ -141,13 +142,19 @@ function App() {
       try {
         const response = await checkAuth();
         const authenticated = response.authenticated || false;
+        const authIsRequired = response.auth_required !== false; // Default to true if undefined
+        
+        setAuthRequired(authIsRequired);
         setIsAuthenticated(authenticated);
-        // Only show login modal if not authenticated
-        if (!authenticated) {
+        
+        // Only show login modal if auth is required AND not authenticated
+        if (authIsRequired && !authenticated) {
           setShowLoginModal(true);
         }
       } catch (error) {
         console.error('Auth check failed:', error);
+        // On error, assume auth is required and user is not authenticated
+        setAuthRequired(true);
         setIsAuthenticated(false);
         setShowLoginModal(true);
       }
@@ -444,7 +451,7 @@ function App() {
             buildVersion={config?.build_version || 'dev'} 
             releaseVersion={config?.release_version || 'dev'} 
             appEnv={config?.app_env || 'development'}
-            isAuthenticated={isAuthenticated}
+            isAuthenticated={authRequired && isAuthenticated}
             onLogout={handleLogout}
           />
           <ToastContainer toasts={toasts} />
