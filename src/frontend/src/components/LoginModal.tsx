@@ -27,11 +27,50 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const usernameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Focus username field on mount
   useEffect(() => {
     usernameRef.current?.focus();
   }, []);
+
+  // Detect autofill and auto-submit for password managers
+  useEffect(() => {
+    const checkAutofill = () => {
+      const usernameInput = usernameRef.current;
+      const passwordInput = passwordRef.current;
+      
+      if (usernameInput && passwordInput) {
+        // Check if both fields have values (from autofill)
+        if (usernameInput.value && passwordInput.value && !isLoading) {
+          // Update state with autofilled values
+          setUsername(usernameInput.value);
+          setPassword(passwordInput.value);
+          
+          // Auto-submit after a short delay to allow password managers to complete
+          setTimeout(() => {
+            if (usernameInput.value && passwordInput.value) {
+              onLogin({
+                username: usernameInput.value.trim(),
+                password: passwordInput.value,
+                remember_me: rememberMe,
+              });
+            }
+          }, 100);
+        }
+      }
+    };
+
+    // Check for autofill on mount and after a delay (for slower password managers)
+    const timer1 = setTimeout(checkAutofill, 100);
+    const timer2 = setTimeout(checkAutofill, 500);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [onLogin, rememberMe, isLoading]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -41,6 +80,14 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
         password,
         remember_me: rememberMe,
       });
+    }
+  };
+
+  // Handle Enter key on username field to move to password
+  const handleUsernameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      passwordRef.current?.focus();
     }
   };
 
@@ -65,11 +112,13 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
 
         {/* Login Form */}
         <form 
-          onSubmit={handleSubmit} 
+          ref={formRef}
+          onSubmit={handleSubmit}
+          method="post"
+          action="#"
           autoComplete="on"
           id="login-form"
           name="login"
-          data-form-type="login"
         >
           {/* Username Field */}
           <div className="mb-4">
@@ -87,10 +136,12 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect="off"
-              spellCheck="false"
+              spellCheck={false}
+              inputMode="text"
               enterKeyHint="next"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={handleUsernameKeyDown}
               disabled={isLoading}
               className="w-full px-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               style={{ backgroundColor: 'var(--input-background)', borderColor: 'var(--border-color)', color: 'var(--text-color)' }}
@@ -108,10 +159,12 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
             </label>
             <div className="relative">
               <input
+                ref={passwordRef}
                 type={showPassword ? 'text' : 'password'}
                 id="password"
                 name="password"
                 autoComplete="current-password"
+                inputMode="text"
                 enterKeyHint="go"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
