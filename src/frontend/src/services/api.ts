@@ -1,4 +1,4 @@
-import { Book, StatusData, AppConfig } from '../types';
+import { Book, StatusData, AppConfig, LoginCredentials, AuthResponse } from '../types';
 
 const API_BASE = '/request/api';
 
@@ -11,12 +11,35 @@ const API = {
   cancelDownload: `${API_BASE}/download`,
   setPriority: `${API_BASE}/queue`,
   clearCompleted: `${API_BASE}/queue/clear`,
-  config: `${API_BASE}/config`
+  config: `${API_BASE}/config`,
+  login: `${API_BASE}/auth/login`,
+  logout: `${API_BASE}/auth/logout`,
+  authCheck: `${API_BASE}/auth/check`
 };
 
-// Utility function for JSON fetch
+// Custom error class for authentication failures
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthenticationError';
+  }
+}
+
+// Utility function for JSON fetch with credentials
 async function fetchJSON<T>(url: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(url, opts);
+  const res = await fetch(url, {
+    ...opts,
+    credentials: 'include',  // Enable cookies for session
+    headers: {
+      'Content-Type': 'application/json',
+      ...opts.headers,
+    },
+  });
+  
+  if (res.status === 401) {
+    throw new AuthenticationError('Unauthorized');
+  }
+  
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -52,4 +75,22 @@ export const clearCompleted = async (): Promise<void> => {
 
 export const getConfig = async (): Promise<AppConfig> => {
   return fetchJSON<AppConfig>(API.config);
+};
+
+// Authentication functions
+export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  return fetchJSON<AuthResponse>(API.login, {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+};
+
+export const logout = async (): Promise<AuthResponse> => {
+  return fetchJSON<AuthResponse>(API.logout, {
+    method: 'POST',
+  });
+};
+
+export const checkAuth = async (): Promise<AuthResponse> => {
+  return fetchJSON<AuthResponse>(API.authCheck);
 };

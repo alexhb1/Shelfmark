@@ -4,7 +4,7 @@ import logging
 import io, re, os
 import sqlite3
 from functools import wraps
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -81,7 +81,11 @@ werkzeug_logger.setLevel(logger.level)
 # The secret key will reset every time we restart, which will
 # require users to authenticate again
 app.config.update(
-    SECRET_KEY = os.urandom(64)
+    SECRET_KEY = os.urandom(64),
+    SESSION_COOKIE_HTTPONLY = True,
+    SESSION_COOKIE_SAMESITE = 'Lax',
+    SESSION_COOKIE_SECURE = False,  # Set to True if using HTTPS
+    PERMANENT_SESSION_LIFETIME = 604800  # 7 days in seconds
 )
 
 def login_required(f):
@@ -91,15 +95,16 @@ def login_required(f):
         # path, return a server error
         if CWA_DB_PATH is not None and not os.path.isfile(CWA_DB_PATH):
             logger.error(f"CWA_DB_PATH is set to {CWA_DB_PATH} but this is not a valid path")
-            return Response("Internal Server Error", 500)
-        if not authenticate():
-            return Response(
-                response="Unauthorized",
-                status=401,
-                headers={
-                    "WWW-Authenticate": 'Basic realm="Calibre-Web-Automated-Book-Downloader"',
-                },
-            )
+            return jsonify({"error": "Internal Server Error"}), 500
+        
+        # If no database is configured, allow access
+        if not CWA_DB_PATH:
+            return f(*args, **kwargs)
+        
+        # Check if user has a valid session
+        if 'user_id' not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -566,49 +571,108 @@ def internal_error(error: Exception) -> Union[Response, Tuple[Response, int]]:
     logger.error_trace(f"500 error: {error}")
     return jsonify({"error": "Internal server error"}), 500
 
-def authenticate() -> bool:
+@app.route('/api/auth/login', methods=['POST'])
+def api_login() -> Union[Response, Tuple[Response, int]]:
     """
-    Helper function that validates Basic credentials
-    against a Calibre-Web app.db SQLite database
-
-    Database structure:
-    - Table 'user' with columns: 'name' (username), 'password'
+    Login endpoint that validates credentials and creates a session.
+    
+    Request Body:
+        username (str): Username
+        password (str): Password
+        remember_me (bool): Whether to extend session duration
+        
+    Returns:
+        flask.Response: JSON with success status or error message.
     """
-
-    # If the database doesn't exist, the user is always authenticated
-    if not CWA_DB_PATH:
-        return True
-
-    # If no authorization object exists, return false to prompt
-    # a request to the user
-    if not request.authorization:
-        return False
-
-    username = request.authorization.get("username")
-    password = request.authorization.get("password")
-
-    # Validate credentials against database
     try:
-        # Open database in true read-only mode to avoid journal/WAL writes on RO mounts
-        db_path = os.fspath(CWA_DB_PATH)
-        db_uri = f"file:{db_path}?mode=ro&immutable=1"
-        conn = sqlite3.connect(db_uri, uri=True)
-        cur = conn.cursor()
-        cur.execute("SELECT password FROM user WHERE name = ?", (username,))
-        row = cur.fetchone()
-        conn.close()
-
-        # Check if user exists and password is correct
-        if not row or not row[0] or not check_password_hash(row[0], password):
-            logger.error("User not found or password check failed")
-            return False
-
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        remember_me = data.get('remember_me', False)
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password are required"}), 400
+        
+        # If the database doesn't exist, authentication always succeeds
+        if not CWA_DB_PATH:
+            session['user_id'] = username
+            session.permanent = remember_me
+            logger.info(f"Login successful for user {username} (no DB configured)")
+            return jsonify({"success": True})
+        
+        # If the CWA_DB_PATH variable exists, but isn't a valid path, return error
+        if not os.path.isfile(CWA_DB_PATH):
+            logger.error(f"CWA_DB_PATH is set to {CWA_DB_PATH} but this is not a valid path")
+            return jsonify({"error": "Database configuration error"}), 500
+        
+        # Validate credentials against database
+        try:
+            db_path = os.fspath(CWA_DB_PATH)
+            db_uri = f"file:{db_path}?mode=ro&immutable=1"
+            conn = sqlite3.connect(db_uri, uri=True)
+            cur = conn.cursor()
+            cur.execute("SELECT password FROM user WHERE name = ?", (username,))
+            row = cur.fetchone()
+            conn.close()
+            
+            # Check if user exists and password is correct
+            if not row or not row[0] or not check_password_hash(row[0], password):
+                logger.warning(f"Login failed for user {username}: Invalid credentials")
+                return jsonify({"error": "Invalid username or password"}), 401
+            
+            # Successful authentication - create session
+            session['user_id'] = username
+            session.permanent = remember_me
+            logger.info(f"Login successful for user {username} (remember_me={remember_me})")
+            return jsonify({"success": True})
+            
+        except Exception as e:
+            logger.error_trace(f"Database error during login: {e}")
+            return jsonify({"error": "Authentication system error"}), 500
+            
     except Exception as e:
-        logger.error_trace(f"CWA DB or authentication send_from_directory: {e}")
-        return False
+        logger.error_trace(f"Login error: {e}")
+        return jsonify({"error": "Login failed"}), 500
 
-    logger.info(f"Authentication successful for user {username}")
-    return True
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout() -> Union[Response, Tuple[Response, int]]:
+    """
+    Logout endpoint that clears the session.
+    
+    Returns:
+        flask.Response: JSON with success status.
+    """
+    try:
+        username = session.get('user_id', 'unknown')
+        session.clear()
+        logger.info(f"Logout successful for user {username}")
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error_trace(f"Logout error: {e}")
+        return jsonify({"error": "Logout failed"}), 500
+
+@app.route('/api/auth/check', methods=['GET'])
+def api_auth_check() -> Union[Response, Tuple[Response, int]]:
+    """
+    Check if user has a valid session.
+    
+    Returns:
+        flask.Response: JSON with authentication status.
+    """
+    try:
+        # If no database is configured, always return authenticated
+        if not CWA_DB_PATH:
+            return jsonify({"authenticated": True})
+        
+        # Check if user has a valid session
+        is_authenticated = 'user_id' in session
+        return jsonify({"authenticated": is_authenticated})
+    except Exception as e:
+        logger.error_trace(f"Auth check error: {e}")
+        return jsonify({"authenticated": False})
 
 # Catch-all route for React Router (must be last)
 # This handles client-side routing by serving index.html for any unmatched routes
