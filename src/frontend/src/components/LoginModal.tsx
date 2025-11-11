@@ -28,49 +28,11 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
 
   // Focus username field on mount
   useEffect(() => {
     usernameRef.current?.focus();
   }, []);
-
-  // Detect autofill and auto-submit for password managers
-  useEffect(() => {
-    const checkAutofill = () => {
-      const usernameInput = usernameRef.current;
-      const passwordInput = passwordRef.current;
-      
-      if (usernameInput && passwordInput) {
-        // Check if both fields have values (from autofill)
-        if (usernameInput.value && passwordInput.value && !isLoading) {
-          // Update state with autofilled values
-          setUsername(usernameInput.value);
-          setPassword(passwordInput.value);
-          
-          // Auto-submit after a short delay to allow password managers to complete
-          setTimeout(() => {
-            if (usernameInput.value && passwordInput.value) {
-              onLogin({
-                username: usernameInput.value.trim(),
-                password: passwordInput.value,
-                remember_me: rememberMe,
-              });
-            }
-          }, 100);
-        }
-      }
-    };
-
-    // Check for autofill on mount and after a delay (for slower password managers)
-    const timer1 = setTimeout(checkAutofill, 100);
-    const timer2 = setTimeout(checkAutofill, 500);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
-  }, [onLogin, rememberMe, isLoading]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -112,13 +74,11 @@ export const LoginModal = ({ onLogin, error, isLoading }: LoginModalProps) => {
 
         {/* Login Form */}
         <form 
-          ref={formRef}
-          onSubmit={handleSubmit}
-          method="post"
-          action="#"
+          onSubmit={handleSubmit} 
           autoComplete="on"
           id="login-form"
           name="login"
+          data-form-type="login"
         >
           {/* Username Field */}
           <div className="mb-4">
