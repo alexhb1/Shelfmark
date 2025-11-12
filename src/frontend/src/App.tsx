@@ -381,7 +381,7 @@ function App() {
 
       {/* Main App Content - Only render when authenticated */}
       {isAuthenticated && (
-        <div className="animate-fade-in">
+        <>
           <Header 
             calibreWebUrl={config?.calibre_web_url || ''} 
             debug={config?.debug || false}
@@ -475,7 +475,7 @@ function App() {
             onCancel={handleCancel}
             activeCount={activeCount}
           />
-        </div>
+        </>
       )}
     </>
   );
